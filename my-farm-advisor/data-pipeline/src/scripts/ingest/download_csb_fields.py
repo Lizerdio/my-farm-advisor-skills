@@ -22,6 +22,11 @@ Usage:
   export DATA_PIPELINE_DATA_ROOT=... AG_GROWER_SLUG=... AG_FARM_SLUG=...
   python download_csb_fields.py --bbox S W N E --min-area-ha 40 \
       --field-prefix ia-r --max-fields 3
+
+Expanding an existing farm:
+  python download_csb_fields.py --bbox S W N E --min-area-ha 40 \
+      --field-prefix il-csb --max-fields 7 --county-name DeKalb \
+      --exclude-existing
 """
 from __future__ import annotations
 
@@ -67,8 +72,34 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--field-prefix", required=True)
     ap.add_argument("--country", default="US")
     ap.add_argument("--state", default="")
+    ap.add_argument(
+        "--state-fips",
+        default="",
+        help="Two-digit state FIPS written to boundary properties (needed by CDL routing)",
+    )
     ap.add_argument("--year", default="")
+    ap.add_argument(
+        "--county-name",
+        default=None,
+        help="Keep only fields whose CSB county matches this name (case-insensitive)",
+    )
+    ap.add_argument(
+        "--exclude-existing",
+        action="store_true",
+        help="Skip candidates overlapping fields already in the farm boundary file",
+    )
+    ap.add_argument(
+        "--overlap-threshold",
+        type=float,
+        default=0.25,
+        help="Minimum overlap fraction (of the smaller polygon) treated as a duplicate",
+    )
     args = ap.parse_args(argv)
+    if args.state and not args.state_fips:
+        print(
+            "  warning: --state-fips not set; CDL routing may skip these fields "
+            "(pass e.g. --state-fips 17 for Illinois)"
+        )
 
     grower = os.environ.get("AG_GROWER_SLUG") or sys.exit("AG_GROWER_SLUG required")
     farm = os.environ.get("AG_FARM_SLUG") or sys.exit("AG_FARM_SLUG required")
@@ -114,17 +145,65 @@ def main(argv: list[str] | None = None) -> int:
             bb = poly.bounds
             if bb[2] > xmin and bb[0] < xmax and bb[3] > ymin and bb[1] < ymax:
                 ha = poly.area / 10000.0  # projected CRS is equal-area
-                if ha >= args.min_area_ha:
-                    rows.append((fid, crop, county, ha, poly))
+                if ha < args.min_area_ha:
+                    continue
+                if (
+                    args.county_name
+                    and str(county).strip().lower() != args.county_name.strip().lower()
+                ):
+                    continue
+                rows.append((fid, crop, county, ha, poly))
     rows.sort(key=lambda r: (-r[3], str(r[0])))
+
+    farm_bounds = farm_dir / "boundary" / "field_boundaries.geojson"
+    existing_geoms = []
+    if args.exclude_existing and farm_bounds.exists():
+        existing = gpd.read_file(farm_bounds)
+        if not existing.empty:
+            existing = existing.to_crs(crs)
+            existing_geoms = [
+                geom
+                for geom in existing.geometry
+                if geom is not None and not geom.is_empty
+            ]
+
+    excluded_overlaps = 0
+    if existing_geoms:
+        filtered = []
+        for row in rows:
+            poly = row[4]
+            duplicate = False
+            for geom in existing_geoms:
+                try:
+                    if geom.contains(poly.centroid):
+                        duplicate = True
+                        break
+                    intersection = poly.intersection(geom).area
+                    denominator = min(poly.area, geom.area)
+                    if (
+                        denominator > 0
+                        and intersection > 0
+                        and intersection / denominator >= args.overlap_threshold
+                    ):
+                        duplicate = True
+                        break
+                except Exception:
+                    continue
+            if duplicate:
+                excluded_overlaps += 1
+            else:
+                filtered.append(row)
+        rows = filtered
+    if excluded_overlaps:
+        print(f"  excluded {excluded_overlaps} candidate(s) overlapping existing fields")
+
     rows = rows[: args.max_fields]
     if not rows:
-        print("no fields above threshold in this window")
+        print("no fields above threshold in this window after filters")
         return 1
 
     inv_rows = []
     merged = None
-    farm_bounds = farm_dir / "boundary" / "field_boundaries.geojson"
     for i, (fid, crop, county, ha, poly) in enumerate(rows):
         slug = f"{args.field_prefix}{i + 1}"
         fdir = farm_dir / "fields" / slug
@@ -135,9 +214,11 @@ def main(argv: list[str] | None = None) -> int:
                     "field_id": slug,
                     "country": args.country,
                     "state": args.state,
+                    "state_fips": str(args.state_fips).zfill(2) if args.state_fips else "",
                     "year": args.year,
                     "area_ha_est": round(ha, 1),
                     "crop": crop,
+                    "crop_name": crop,
                     "area_acres": round(ha * 2.47105, 1),
                     "source": "usda_csb_fiboa",
                     "csb_id": str(fid),
@@ -176,6 +257,11 @@ def main(argv: list[str] | None = None) -> int:
         "row_groups_read": len(sel),
         "total_row_groups": pf.metadata.num_row_groups,
         "min_area_ha": args.min_area_ha,
+        "state_fips": args.state_fips,
+        "county_name": args.county_name,
+        "exclude_existing": bool(args.exclude_existing),
+        "overlap_threshold": args.overlap_threshold,
+        "excluded_existing_overlaps": excluded_overlaps,
         "accessed_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
         "fields": [r["field_id"] for r in inv_rows],
     }

@@ -4,7 +4,7 @@ Use this umbrella index to route into the major farm workflows. Start from the a
 
 - [Admin](admin/INDEX.md) - geospatial admin tools and interactive web map workflows
 - [Data Sources](data-sources/INDEX.md) - rebuilds, reporting, and data-pipeline orchestration
-- [EDA](eda/INDEX.md) - exploratory analysis, comparisons, and visualization
+- [EDA](eda/INDEX.md) - exploratory analysis, comparisons, visualization, and the field-level boundary/crop/weather workflow
 - [Field Management](field-management/INDEX.md) - boundaries, sampling, and headlands
 - [Imagery](imagery/INDEX.md) - Landsat and Sentinel-2 guides
 - [Soil](soil/INDEX.md) - SSURGO, posters, and CDL
