@@ -394,6 +394,7 @@ def ensure_canonical_data_tree(
             "display_name": grower_slug,
             "notes": "Canonical grower metadata",
         },
+        overwrite=False,
     )
     _write_text(grower / "logs" / "pipeline_runs.jsonl", "", overwrite=False)
 
@@ -417,6 +418,7 @@ def ensure_canonical_data_tree(
             "default_crs": "EPSG:4326",
             "notes": "Canonical farm metadata",
         },
+        overwrite=False,
     )
     _write_text(farm / "logs" / "pipeline_runs.jsonl", "", overwrite=False)
 
