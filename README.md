@@ -571,6 +571,17 @@ geneticist — gets both without us choosing their agent harness for them.
 | Prediction | Genomic prediction, BLUP, Bayesian GP, elastic net, cross-validation |
 | Reporting | Ideograms, analysis reports, real-dataset packaging |
 
+## Assignment 2 — the boundary/crop/weather EDA
+
+`my-farm-advisor/eda/eda-boundary-crop-weather/` is the custom skill behind
+Assignment 2: it compares three ten-field grower groups (Story IA, DeKalb IL,
+York NE) on boundary geometry, CDL crop history, and NASA POWER weather, and
+writes ten reviewed figures, tidy tables, an evidence CSV, and a manifest under
+`${DATA_PIPELINE_DATA_ROOT}/data-pipeline/eda/boundary-crop-weather/`. The
+committed one-time report — PDF plus downscaled final figures — is in
+[`reports/assignment-2-eda/`](reports/assignment-2-eda/); it is an assignment
+deliverable, not part of the reusable skill.
+
 ## Repository layout
 
 ```text
